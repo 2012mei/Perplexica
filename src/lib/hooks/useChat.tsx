@@ -17,10 +17,11 @@ import {
   useState,
 } from 'react';
 import crypto from 'crypto';
-import { useSearchParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { getSuggestions } from '../actions';
 import { MinimalProvider } from '../models/types';
+import { getAutoMediaSearch } from '../config/clientRegistry';
 
 export type Section = {
   userMessage: UserMessage;
@@ -48,6 +49,8 @@ type ChatContext = {
   messageAppeared: boolean;
   isReady: boolean;
   hasError: boolean;
+  chatModelProvider: ChatModelProvider;
+  embeddingModelProvider: EmbeddingModelProvider;
   setOptimizationMode: (mode: string) => void;
   setFocusMode: (mode: string) => void;
   setFiles: (files: File[]) => void;
@@ -58,6 +61,8 @@ type ChatContext = {
     rewrite?: boolean,
   ) => Promise<void>;
   rewrite: (messageId: string) => void;
+  setChatModelProvider: (provider: ChatModelProvider) => void;
+  setEmbeddingModelProvider: (provider: EmbeddingModelProvider) => void;
 };
 
 export interface File {
@@ -89,17 +94,6 @@ const checkConfig = async (
     let embeddingModelProviderId = localStorage.getItem(
       'embeddingModelProviderId',
     );
-
-    const autoImageSearch = localStorage.getItem('autoImageSearch');
-    const autoVideoSearch = localStorage.getItem('autoVideoSearch');
-
-    if (!autoImageSearch) {
-      localStorage.setItem('autoImageSearch', 'true');
-    }
-
-    if (!autoVideoSearch) {
-      localStorage.setItem('autoVideoSearch', 'false');
-    }
 
     const res = await fetch(`/api/providers`, {
       headers: {
@@ -256,25 +250,24 @@ export const chatContext = createContext<ChatContext>({
   sections: [],
   notFound: false,
   optimizationMode: '',
+  chatModelProvider: { key: '', providerId: '' },
+  embeddingModelProvider: { key: '', providerId: '' },
   rewrite: () => {},
   sendMessage: async () => {},
   setFileIds: () => {},
   setFiles: () => {},
   setFocusMode: () => {},
   setOptimizationMode: () => {},
+  setChatModelProvider: () => {},
+  setEmbeddingModelProvider: () => {},
 });
 
-export const ChatProvider = ({
-  children,
-  id,
-}: {
-  children: React.ReactNode;
-  id?: string;
-}) => {
+export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
+  const params: { chatId: string } = useParams();
   const searchParams = useSearchParams();
   const initialMessage = searchParams.get('q');
 
-  const [chatId, setChatId] = useState<string | undefined>(id);
+  const [chatId, setChatId] = useState<string | undefined>(params.chatId);
   const [newChatCreated, setNewChatCreated] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -444,6 +437,19 @@ export const ChatProvider = ({
   }, []);
 
   useEffect(() => {
+    if (params.chatId && params.chatId !== chatId) {
+      setChatId(params.chatId);
+      setMessages([]);
+      setChatHistory([]);
+      setFiles([]);
+      setFileIds([]);
+      setIsMessagesLoaded(false);
+      setNotFound(false);
+      setNewChatCreated(false);
+    }
+  }, [params.chatId, chatId]);
+
+  useEffect(() => {
     if (
       chatId &&
       !newChatCreated &&
@@ -466,7 +472,7 @@ export const ChatProvider = ({
       setChatId(crypto.randomBytes(20).toString('hex'));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [chatId, isMessagesLoaded, newChatCreated, messages.length]);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -519,7 +525,7 @@ export const ChatProvider = ({
     messageId,
     rewrite = false,
   ) => {
-    if (loading) return;
+    if (loading || !message) return;
     setLoading(true);
     setMessageAppeared(false);
 
@@ -608,16 +614,13 @@ export const ChatProvider = ({
 
         const lastMsg = messagesRef.current[messagesRef.current.length - 1];
 
-        const autoImageSearch = localStorage.getItem('autoImageSearch');
-        const autoVideoSearch = localStorage.getItem('autoVideoSearch');
+        const autoMediaSearch = getAutoMediaSearch();
 
-        if (autoImageSearch === 'true') {
+        if (autoMediaSearch) {
           document
             .getElementById(`search-images-${lastMsg.messageId}`)
             ?.click();
-        }
 
-        if (autoVideoSearch === 'true') {
           document
             .getElementById(`search-videos-${lastMsg.messageId}`)
             ?.click();
@@ -743,6 +746,10 @@ export const ChatProvider = ({
         setOptimizationMode,
         rewrite,
         sendMessage,
+        setChatModelProvider,
+        chatModelProvider,
+        embeddingModelProvider,
+        setEmbeddingModelProvider,
       }}
     >
       {children}

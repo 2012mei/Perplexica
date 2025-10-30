@@ -1,5 +1,6 @@
 import Select from '@/components/ui/Select';
 import { ConfigModelProvider } from '@/lib/config/types';
+import { useChat } from '@/lib/hooks/useChat';
 import { useState } from 'react';
 import { toast } from 'sonner';
 
@@ -16,6 +17,7 @@ const ModelSelect = ({
       : `${localStorage.getItem('embeddingModelProviderId')}/${localStorage.getItem('embeddingModelKey')}`,
   );
   const [loading, setLoading] = useState(false);
+  const { setChatModelProvider, setEmbeddingModelProvider } = useChat();
 
   const handleSave = async (newValue: string) => {
     setLoading(true);
@@ -23,20 +25,27 @@ const ModelSelect = ({
 
     try {
       if (type === 'chat') {
-        localStorage.setItem('chatModelProviderId', newValue.split('/')[0]);
-        localStorage.setItem(
-          'chatModelKey',
-          newValue.split('/').slice(1).join('/'),
-        );
+        const providerId = newValue.split('/')[0];
+        const modelKey = newValue.split('/').slice(1).join('/');
+
+        localStorage.setItem('chatModelProviderId', providerId);
+        localStorage.setItem('chatModelKey', modelKey);
+
+        setChatModelProvider({
+          providerId: providerId,
+          key: modelKey,
+        });
       } else {
-        localStorage.setItem(
-          'embeddingModelProviderId',
-          newValue.split('/')[0],
-        );
-        localStorage.setItem(
-          'embeddingModelKey',
-          newValue.split('/').slice(1).join('/'),
-        );
+        const providerId = newValue.split('/')[0];
+        const modelKey = newValue.split('/').slice(1).join('/');
+
+        localStorage.setItem('embeddingModelProviderId', providerId);
+        localStorage.setItem('embeddingModelKey', modelKey);
+
+        setEmbeddingModelProvider({
+          providerId: providerId,
+          key: modelKey,
+        });
       }
     } catch (error) {
       console.error('Error saving config:', error);
@@ -55,8 +64,8 @@ const ModelSelect = ({
           </h4>
           <p className="text-[11px] lg:text-xs text-black/50 dark:text-white/50">
             {type === 'chat'
-              ? 'Select the model to use for chat responses'
-              : 'Select the model to use for embeddings'}
+              ? 'Choose which model to use for generating responses'
+              : 'Choose which model to use for generating embeddings'}
           </p>
         </div>
         <Select
